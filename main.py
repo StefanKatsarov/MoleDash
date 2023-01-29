@@ -17,56 +17,107 @@ mole = pygame.transform.scale(mole, (70, 70))
 
 carrot = pygame.image.load('carrot.png').convert_alpha()
 carrot = pygame.transform.scale(carrot, (40, 40))
-carrot_rect = carrot.get_rect()
+
+shovel = pygame.image.load('shovel.png').convert_alpha()
+right_shovel = pygame.transform.scale(shovel, (300, 300))
+left_shovel = pygame.transform.rotate(right_shovel, 180)
 
 TERRAIN = pygame.image.load('terrain_og.jpg').convert_alpha()
 TERRAIN_HEIGHT = TERRAIN.get_height()
 bg_rect = TERRAIN.get_rect()
 
 tiles = 3
+
+# Custom events
 CARROT_SPAWN = pygame.USEREVENT + 1
 CARROT_EATEN = pygame.USEREVENT + 2
+RIGHT_SHOVEL_SPAWN = pygame.USEREVENT + 3
+LEFT_SHOVEL_SPAWN = pygame.USEREVENT + 4
+
+# Custom events spawn intervals
 pygame.time.set_timer(CARROT_SPAWN, 1500)
-carrots = []
+pygame.time.set_timer(RIGHT_SHOVEL_SPAWN, 3000)
+pygame.time.set_timer(LEFT_SHOVEL_SPAWN, 5500)
+
+left_shovels = []
+right_shovels = []
 
 
-def carrots_movement(carrots, player):
-    if carrots:
-        for carr in carrots:
-            carr.y += VEL
-            if player.colliderect(carr):
-                carrots.remove(carr)
-                pygame.event.post(pygame.event.Event(CARROT_EATEN))
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = mole
+        self.rect = self.image.get_rect(midbottom=(WIDTH // 2, HEIGHT))
 
-            screen.blit(carrot, carr)
-        return carrots
-    else:
-        return []
+    def player_input(self):
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_w] and self.rect.y > 0:  # UP
+            self.rect.y -= VEL
+        if keys[pygame.K_s] and self.rect.y <= HEIGHT - 70:  # DOWN
+            self.rect.y += VEL
+        if keys[pygame.K_a] and self.rect.x > 0:  # LEFT
+            self.rect.x -= VEL
+        if keys[pygame.K_d] and self.rect.x <= WIDTH - 70:  # RIGHT
+            self.rect.x += VEL
+
+    def update(self):
+        self.player_input()
 
 
-def draw_window(player, scroll, carrots, score):
+class Vegetables(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = carrot
+        self.rect = self.image.get_rect(midtop=(random.randint(0, WIDTH), 0))
+
+    def update(self):
+        self.rect.y += VEL
+        self.destroy()
+
+    def destroy(self):
+        if self.rect.y >= HEIGHT + 100:
+            self.kill()
+
+
+def collision_sprite(score):
+    if pygame.sprite.spritecollide(play.sprite, veggies, True):
+        score += 1
+    return score
+
+
+play = pygame.sprite.GroupSingle()
+play.add(Player())
+
+veggies = pygame.sprite.Group()
+
+
+def shovels_movement(right_shovels, left_shovels):
+    if right_shovels:
+        for shov in right_shovels:
+            shov.y += VEL
+
+            screen.blit(right_shovel, shov)
+    if left_shovels:
+        for shov in left_shovels:
+            shov.y += VEL
+
+            screen.blit(left_shovel, shov)
+
+    return right_shovels, left_shovels
+
+
+def draw_window(scroll, score, right_shovels, left_shovels):
     for i in range(0, tiles):
         screen.blit(TERRAIN, (0, i * TERRAIN_HEIGHT + scroll))
     score_to_draw = SCORE_FONT.render('Score: ' + str(score), True, 'black')
     screen.blit(score_to_draw, (160, 15))
-    screen.blit(mole, (player.x, player.y))
-    carrots = carrots_movement(carrots, player)
+    right_shovels, left_shovels = shovels_movement(right_shovels, left_shovels)
+    play.draw(screen)
+    veggies.draw(screen)
     pygame.display.update()
 
 
-def mole_movement(keys_pressed, player):
-    if keys_pressed[pygame.K_a] and player.x > 0:  # LEFT
-        player.x -= VEL
-    if keys_pressed[pygame.K_w] and player.y > 0:  # UP
-        player.y -= VEL
-    if keys_pressed[pygame.K_s] and player.y <= HEIGHT - 70:  # DOWN
-        player.y += VEL
-    if keys_pressed[pygame.K_d] and player.x <= WIDTH - 70:  # RIGHT
-        player.x += VEL
-
-
 def main():
-    player = pygame.Rect(100, 300, mole.get_width(), mole.get_height())
     clock = pygame.time.Clock()
     run = True
     scroll = 0
@@ -77,12 +128,15 @@ def main():
             if event.type == pygame.QUIT:
                 run = False
             if event.type == CARROT_SPAWN:
-                carrots.append(carrot.get_rect(midtop=(random.randint(0, WIDTH), 0)))
-            if event.type == CARROT_EATEN:
-                score += 1
-        keys_pressed = pygame.key.get_pressed()
-        mole_movement(keys_pressed, player)
-        draw_window(player, scroll, carrots, score)
+                veggies.add(Vegetables())
+            if event.type == RIGHT_SHOVEL_SPAWN:
+                right_shovels.append((right_shovel.get_rect(midbottom=(WIDTH, 0))))
+            if event.type == LEFT_SHOVEL_SPAWN:
+                left_shovels.append((right_shovel.get_rect(midbottom=(0, 0))))
+        draw_window(scroll, score, right_shovels, left_shovels)
+        play.update()
+        veggies.update()
+        score = collision_sprite(score)
 
         scroll -= 3
         if abs(scroll) > TERRAIN_HEIGHT:
