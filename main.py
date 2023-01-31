@@ -18,29 +18,25 @@ mole = pygame.transform.scale(mole, (70, 70))
 carrot = pygame.image.load('carrot.png').convert_alpha()
 carrot = pygame.transform.scale(carrot, (40, 40))
 
-shovel = pygame.image.load('shovel.png').convert_alpha()
-right_shovel = pygame.transform.scale(shovel, (300, 300))
+right_shovel = pygame.image.load('shovel_300.png').convert_alpha()
 left_shovel = pygame.transform.rotate(right_shovel, 180)
 
 TERRAIN = pygame.image.load('terrain_og.jpg').convert_alpha()
 TERRAIN_HEIGHT = TERRAIN.get_height()
 bg_rect = TERRAIN.get_rect()
+background_mole = pygame.image.load('full_game_over.png').convert_alpha()
 
 tiles = 3
 
 # Custom events
 CARROT_SPAWN = pygame.USEREVENT + 1
 CARROT_EATEN = pygame.USEREVENT + 2
-RIGHT_SHOVEL_SPAWN = pygame.USEREVENT + 3
-LEFT_SHOVEL_SPAWN = pygame.USEREVENT + 4
+SHOVEL_SPAWN = pygame.USEREVENT + 3
+
 
 # Custom events spawn intervals
 pygame.time.set_timer(CARROT_SPAWN, 1500)
-pygame.time.set_timer(RIGHT_SHOVEL_SPAWN, 3000)
-pygame.time.set_timer(LEFT_SHOVEL_SPAWN, 5500)
-
-left_shovels = []
-right_shovels = []
+pygame.time.set_timer(SHOVEL_SPAWN, 3000)
 
 
 class Player(pygame.sprite.Sprite):
@@ -79,41 +75,54 @@ class Vegetables(pygame.sprite.Sprite):
             self.kill()
 
 
+class Obstacle(pygame.sprite.Sprite):
+    def __init__(self, type_of_shovel):
+        super().__init__()
+        if type_of_shovel == 'right':
+            self.image = right_shovel
+            self.rect = right_shovel.get_rect(midbottom=(WIDTH, 0))
+        elif type_of_shovel == 'left':
+            self.image = left_shovel
+            self.rect = left_shovel.get_rect(midbottom=(0, 0))
+
+    def update(self):
+        self.rect.y += VEL
+        self.destroy()
+
+    def destroy(self):
+        if self.rect.y >= HEIGHT + 100:
+            self.kill()
+
+
 def collision_sprite(score):
-    if pygame.sprite.spritecollide(play.sprite, veggies, True):
+    if pygame.sprite.spritecollide(player.sprite, veggies, True):
         score += 1
     return score
 
 
-play = pygame.sprite.GroupSingle()
-play.add(Player())
+def endgame():
+    if pygame.sprite.spritecollide(player.sprite, shovels, True):
+        veggies.empty()
+        shovels.empty()
+        return False
+    return True
+
+
+player = pygame.sprite.GroupSingle()
+player.add(Player())
 
 veggies = pygame.sprite.Group()
+shovels = pygame.sprite.Group()
 
 
-def shovels_movement(right_shovels, left_shovels):
-    if right_shovels:
-        for shov in right_shovels:
-            shov.y += VEL
-
-            screen.blit(right_shovel, shov)
-    if left_shovels:
-        for shov in left_shovels:
-            shov.y += VEL
-
-            screen.blit(left_shovel, shov)
-
-    return right_shovels, left_shovels
-
-
-def draw_window(scroll, score, right_shovels, left_shovels):
+def draw_window(scroll, score):
     for i in range(0, tiles):
         screen.blit(TERRAIN, (0, i * TERRAIN_HEIGHT + scroll))
     score_to_draw = SCORE_FONT.render('Score: ' + str(score), True, 'black')
     screen.blit(score_to_draw, (160, 15))
-    right_shovels, left_shovels = shovels_movement(right_shovels, left_shovels)
-    play.draw(screen)
+    player.draw(screen)
     veggies.draw(screen)
+    shovels.draw(screen)
     pygame.display.update()
 
 
@@ -122,26 +131,38 @@ def main():
     run = True
     scroll = 0
     score = 0
+    game_active = True
     while run:
         clock.tick(FPS)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
-            if event.type == CARROT_SPAWN:
-                veggies.add(Vegetables())
-            if event.type == RIGHT_SHOVEL_SPAWN:
-                right_shovels.append((right_shovel.get_rect(midbottom=(WIDTH, 0))))
-            if event.type == LEFT_SHOVEL_SPAWN:
-                left_shovels.append((right_shovel.get_rect(midbottom=(0, 0))))
-        draw_window(scroll, score, right_shovels, left_shovels)
-        play.update()
-        veggies.update()
-        score = collision_sprite(score)
+            if game_active:
+                if event.type == CARROT_SPAWN:
+                    veggies.add(Vegetables())
+                if event.type == SHOVEL_SPAWN:
+                    shovels.add(Obstacle(random.choice(['right', 'left'])))
+            else:
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                    game_active = True
+        if game_active:
+            draw_window(scroll, score)
 
-        scroll -= 3
-        if abs(scroll) > TERRAIN_HEIGHT:
-            scroll = 0
+            player.update()
+            veggies.update()
+            shovels.update()
 
+            game_active = endgame()
+            score = collision_sprite(score)
+
+            scroll -= 3
+            if abs(scroll) > TERRAIN_HEIGHT:
+                scroll = 0
+        else:
+            screen.blit(background_mole, (0, 0))
+            score = 0
+            player.sprite.rect = mole.get_rect(midbottom=(WIDTH // 2, HEIGHT))
+            pygame.display.update()
     pygame.quit()
     sys.exit()
 
